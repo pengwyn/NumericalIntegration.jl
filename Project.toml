@@ -17,6 +17,7 @@ InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 
 [targets]
-test = ["Test", "InteractiveUtils", "StaticArrays", "HCubature", "Unitful"]
+test = ["Test", "InteractiveUtils", "StaticArrays", "HCubature", "Unitful", "OffsetArrays"]

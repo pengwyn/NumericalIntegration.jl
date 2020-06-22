@@ -90,3 +90,31 @@ using Unitful
         end
     end
 end
+
+using OffsetArrays
+@testset "Correct indexing for OffsetArrays" begin
+    x1 = OffsetArray(LinRange(0, 1, 1025), 0:1024)
+    y1 = x1.^2
+    cumul1 = x1.^3/3
+    # To compare a vector with same length but different indexing.
+    y2 = ones(-512:512)
+
+    for M in subtypes(IntegrationMethod)
+        # TODO: RombergEven needs to implement this.
+        M == RombergEven && continue
+        # Ignore "Fast" variants as they don't do proper checks and are called
+        # by the "Slow" versions anyway.
+        endswith(string(M),"Fast") && continue
+
+        @test isapprox(cumul1[end], integrate(x1, y1, M()), atol=1e-6)
+
+        @test_throws AssertionError integrate(x1,y2,M())
+
+        if hasmethod(cumul_integrate, Tuple{AbstractVector, AbstractVector, M})
+            result = cumul_integrate(x1,y1,M())
+            @test axes(result) == (0:1024,)
+            @test all(isapprox.(result, cumul1, atol=1e-6))
+            @test_throws AssertionError cumul_integrate(x1,y2,M())
+        end
+    end
+end

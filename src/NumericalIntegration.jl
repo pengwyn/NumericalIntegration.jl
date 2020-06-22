@@ -51,9 +51,8 @@ function cumul_integrate end
 Use Trapezoidal rule. This is the default when no method is supplied.
 """
 function integrate(x::AbstractVector, y::AbstractVector, ::Trapezoidal)
-    n = length(x)
-    length(x) == length(y) || error("x and y vectors must be of the same length!")
-    n ≥ 2 || error("vectors must contain at least two elements")
+    @assert axes(x) == axes(y) "x and y must have the same geometry"
+    @assert length(x) ≥ 2 "vectors must contain at least two elements"
 
     return integrate(x, y, TrapezoidalFast())
 end
@@ -67,9 +66,8 @@ end
 Use Trapezoidal rule, assuming evenly spaced vector x.
 """
 function integrate(x::AbstractVector, y::AbstractVector, ::TrapezoidalEven)
-    n = length(x)
-    length(y) == n || error("x and y vectors must be of the same length!")
-    n ≥ 2 || error("vectors must contain at least two elements")
+    @assert axes(x) == axes(y) "x and y must have the same geometry"
+    @assert length(x) ≥ 2 "vectors must contain at least two elements"
 
     return integrate(x, y, TrapezoidalEvenFast())
 end
@@ -80,8 +78,8 @@ end
 Use Trapezoidal rule. Unsafe method: no bound checking.
 """
 function integrate(x::AbstractVector, y::AbstractVector, ::TrapezoidalFast)
-    @inbounds retval = (x[2] - x[1]) * (y[1] + y[2])
-    @inbounds @fastmath @simd for i in 2:(length(y) - 1)
+    @inbounds retval = (x[begin+1] - x[begin]) * (y[begin] + y[begin+1])
+    @inbounds @fastmath @simd for i in eachindex(y)[begin+1:end-1]
         retval += (x[i+1] - x[i]) * (y[i] + y[i+1])
     end
     return HALF * retval
@@ -97,13 +95,13 @@ Use Trapezoidal rule, assuming evenly spaced vector x. Unsafe method: no bound c
 """
 function integrate(x::AbstractVector, y::AbstractVector, ::TrapezoidalEvenFast)
     if length(x) < 3
-        @inbounds return HALF * (x[2] - x[1]) * (y[1] + y[2])
+        @inbounds return HALF * (x[begin+1] - x[begin]) * (y[begin] + y[begin+1])
     else
-        @inbounds retval = y[2]
-        @inbounds @fastmath @simd for i in 3:(length(y) - 1)
+        @inbounds retval = y[begin+1]
+        @inbounds @fastmath @simd for i in eachindex(y)[begin+2:end-1]
             retval += y[i]
         end
-        @inbounds return (x[2] - x[1]) * (retval + HALF * (y[1] + y[end]))
+        @inbounds return (x[begin+1] - x[begin]) * (retval + HALF * (y[begin] + y[end]))
     end
 end
 
@@ -113,8 +111,8 @@ end
 Use Simpson's rule, assuming evenly spaced vector x.
 """
 function integrate(x::AbstractVector, y::AbstractVector, ::SimpsonEven)
-    length(x) == length(y) || error("x and y vectors must be of the same length!")
-    length(x) ≥ 4 || error("vectors must contain at least 4 elements")
+    @assert axes(x) == axes(y) "x and y must have the same geometry"
+    @assert length(x) ≥ 4 "vectors must contain at least 4 elements"
 
     return integrate(x, y, SimpsonEvenFast())
 end
@@ -125,12 +123,12 @@ end
 Use Simpson's rule, assuming evenly spaced vector x.  Unsafe method: no bound checking.
 """
 function integrate(x::AbstractVector, y::AbstractVector, ::SimpsonEvenFast)
-    @inbounds retval = (17 * (y[1] + y[end]) + 59 * (y[2] + y[end-1]) +
-                        43 * (y[3] + y[end-2]) + 49 * (y[4] + y[end-3])) / 48
-    @fastmath @inbounds for i in 5:(length(y) - 4)
+    @inbounds retval = (17 * (y[begin] + y[end]) + 59 * (y[begin+1] + y[end-1]) +
+                        43 * (y[begin+2] + y[end-2]) + 49 * (y[begin+3] + y[end-3])) / 48
+    @fastmath @inbounds for i in eachindex(y)[begin+4:end-4]
         retval += y[i]
     end
-    @inbounds return (x[2] - x[1]) * retval
+    @inbounds return (x[begin+1] - x[begin]) * retval
 end
 
 """
@@ -139,14 +137,15 @@ end
 When y is an array, compute integral along dimension specified by dims (default 2: columns).
 """
 function integrate(x::AbstractVector, y::AbstractMatrix, M::IntegrationMethod; dims=2)
-    out = [integrate(x,selectdim(y,dims,j),M) for j=1:size(y,dims)]
+    out = [integrate(x,selectdim(y,dims,j),M) for j=axes(y,dims)]
     return out
 end
 
 function integrate(x::AbstractVector, y::AbstractVector, m::RombergEven)
-    @assert length(x) == length(y) "x and y vectors must be of the same length!"
+    @assert axes(x) == axes(y) "x and y must have the same geometry"
     @assert ((length(x) - 1) & (length(x) - 2)) == 0 "Need length of vector to be 2^n + 1"
     maxsteps::Integer = Int(log2(length(x)-1))
+    @assert firstindex(x) == 1 "RombergEven requires 1:N indexed vectors."
     @inbounds h = x[end] - x[1]
     @inbounds v = (y[1] + y[end]) * h * HALF
     rombaux = Matrix{typeof(v)}(undef, maxsteps, 2)
@@ -186,11 +185,7 @@ end
 
 @inline function _midpoints(x::AbstractVector{T}) where T
     length(x) == 1 && return x
-    retval = Vector{T}(undef, length(x)-1)
-    @simd for i in eachindex(retval)
-        retval[i] = HALF * (x[i] + x[i+1])
-    end
-    return retval
+    return HALF * (x[begin:end-1] + x[begin+1:end])
 end
 @inline function _midpoints(x::AbstractRange)
     length(x) == 1 && return x
@@ -261,8 +256,8 @@ end
 Use Trapezoidal rule. This is the default when no method is supplied.
 """
 function cumul_integrate(x::AbstractVector, y::AbstractVector, ::Trapezoidal)
-    @assert length(x) == length(y) "x and y vectors must be of the same length!"
-    length(x) ≥ 2 || error("vectors must contain at least two elements")
+    @assert axes(x) == axes(y) "x and y must have the same geometry"
+    @assert length(x) ≥ 2 "vectors must contain at least two elements"
 
     return cumul_integrate(x, y, TrapezoidalFast())
 end
@@ -276,8 +271,8 @@ end
 Use Trapezoidal rule, assuming evenly spaced vector x.
 """
 function cumul_integrate(x::AbstractVector, y::AbstractVector, ::TrapezoidalEven)
-    @assert length(x) == length(y) "x and y vectors must be of the same length!"
-    length(x) ≥ 2 || error("vectors must contain at least two elements")
+    @assert axes(x) == axes(y) "x and y must have the same geometry"
+    @assert length(x) ≥ 2 "vectors must contain at least two elements"
 
     return cumul_integrate(x, y, TrapezoidalEvenFast())
 end
@@ -289,13 +284,14 @@ Use Trapezoidal rule. Unsafe method: no bound checking.
 """
 function cumul_integrate(x::AbstractVector, y::AbstractVector, ::TrapezoidalFast)
     # compute initial value
-    @inbounds init = (x[2] - x[1]) * (y[1] + y[2])
-    n = length(x)
-    retarr = Vector{typeof(init)}(undef, n)
-    retarr[1] = init
+    @inbounds init = (x[begin+1] - x[begin]) * (y[begin] + y[begin+1])
+    @assert axes(x) == axes(y) "x and y must have the same geometry"
+    retarr = similar(y, typeof(init))
+    retarr[begin] = zero(init)
+    retarr[begin+1] = init
 
     # for all other values
-    @inbounds @fastmath for i in 2:n # not sure if @simd can do anything here
+    @inbounds @fastmath for i in eachindex(retarr)[begin+2:end] # not sure if @simd can do anything here
         retarr[i] = retarr[i-1] + (x[i] - x[i-1]) * (y[i] + y[i-1])
     end
 
@@ -308,16 +304,17 @@ end
 Use Trapezoidal rule, assuming evenly spaced vector x. Unsafe method: no bound checking.
 """
 function cumul_integrate(x::AbstractVector, y::AbstractVector, ::TrapezoidalEvenFast)
-    @inbounds init = y[1] + y[2]
-    n = length(x)
-    retarr = Vector{typeof(init)}(undef, n)
-    retarr[1] = init
+    @assert axes(x) == axes(y) "x and y must have the same geometry"
+    @inbounds init = y[begin] + y[begin+1]
+    retarr = similar(y, typeof(init))
+    retarr[begin] = zero(init)
+    retarr[begin+1] = init
 
     # for all other values
-    @fastmath for i in 2 : length(y)
-        @inbounds retarr[i] = retarr[i-1] + (y[i] + y[i-1])
+    @inbounds @fastmath for i in eachindex(retarr)[begin+2:end]
+        retarr[i] = retarr[i-1] + (y[i] + y[i-1])
     end
-    @inbounds return (x[2] - x[1]) * HALF * retarr
+    @inbounds return (x[begin+1] - x[begin]) * HALF * retarr
 end
 
 """
