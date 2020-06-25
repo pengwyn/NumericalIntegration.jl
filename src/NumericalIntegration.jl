@@ -145,9 +145,8 @@ function integrate(x::AbstractVector, y::AbstractVector, m::RombergEven)
     @assert axes(x) == axes(y) "x and y must have the same geometry"
     @assert ((length(x) - 1) & (length(x) - 2)) == 0 "Need length of vector to be 2^n + 1"
     maxsteps::Integer = Int(log2(length(x)-1))
-    @assert firstindex(x) == 1 "RombergEven requires 1:N indexed vectors."
-    @inbounds h = x[end] - x[1]
-    @inbounds v = (y[1] + y[end]) * h * HALF
+    @inbounds h = x[end] - x[begin]
+    @inbounds v = (y[begin] + y[end]) * h * HALF
     rombaux = Matrix{typeof(v)}(undef, maxsteps, 2)
     rombaux[1,1] = v
     prevcol = 1
@@ -161,7 +160,7 @@ function integrate(x::AbstractVector, y::AbstractVector, m::RombergEven)
         jumpsize = div(length(x)-1, 2*npoints)
         c = zero(eltype(y))
         for j in 1 : npoints
-            c += y[1 + (2*j-1)*jumpsize]
+            c += y[begin + (2*j-1)*jumpsize]
         end
         rombaux[1, currcol] = h*c + HALF*rombaux[1, prevcol]
         for j in 2 : (i+1)
@@ -287,11 +286,10 @@ function cumul_integrate(x::AbstractVector, y::AbstractVector, ::TrapezoidalFast
     @inbounds init = (x[begin+1] - x[begin]) * (y[begin] + y[begin+1])
     @assert axes(x) == axes(y) "x and y must have the same geometry"
     retarr = similar(y, typeof(init))
-    retarr[begin] = zero(init)
-    retarr[begin+1] = init
+    retarr[begin] = init
 
     # for all other values
-    @inbounds @fastmath for i in eachindex(retarr)[begin+2:end] # not sure if @simd can do anything here
+    @inbounds @fastmath for i in eachindex(retarr)[begin+1:end] # not sure if @simd can do anything here
         retarr[i] = retarr[i-1] + (x[i] - x[i-1]) * (y[i] + y[i-1])
     end
 
@@ -307,11 +305,10 @@ function cumul_integrate(x::AbstractVector, y::AbstractVector, ::TrapezoidalEven
     @assert axes(x) == axes(y) "x and y must have the same geometry"
     @inbounds init = y[begin] + y[begin+1]
     retarr = similar(y, typeof(init))
-    retarr[begin] = zero(init)
-    retarr[begin+1] = init
+    retarr[begin] = init
 
     # for all other values
-    @inbounds @fastmath for i in eachindex(retarr)[begin+2:end]
+    @inbounds @fastmath for i in eachindex(retarr)[begin+1:end]
         retarr[i] = retarr[i-1] + (y[i] + y[i-1])
     end
     @inbounds return (x[begin+1] - x[begin]) * HALF * retarr
